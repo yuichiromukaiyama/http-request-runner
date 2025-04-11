@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HTTP Request Runner</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: {
+              50: '#f0f9ff',
+              100: '#e0f2fe',
+              200: '#bae6fd',
+              300: '#7dd3fc',
+              400: '#38bdf8',
+              500: '#0ea5e9',
+              600: '#0284c7',
+              700: '#0369a1',
+              800: '#075985',
+              900: '#0c4a6e',
+            }
+          },
+          fontFamily: {
+            'sans': ['Inter', 'system-ui', 'sans-serif'],
+          },
+        }
+      }
+    }
+  </script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/inter-ui@3.19.3/inter.min.css">
+  <style>
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+    }
+
+    .code-font {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+  </style>
+</head>
+
+<body class="bg-slate-50 min-h-screen">
+  <!-- 3-column layout: Sidebar (connections), Controls, Main content -->
+  <div class="flex min-h-screen">
+    <!-- Sidebar for saved connections -->
+    <div id="sidebar" class="w-64 bg-white border-r border-gray-200 hidden md:block">
+      <div class="p-4 border-b border-gray-200">
+        <h2 class="text-lg font-medium text-gray-900">保存済み接続</h2>
+        <p class="text-xs text-gray-500 mt-1" id="sidebar-date">2025年4月11日</p>
+      </div>
+
+      <div class="p-2">
+        <div class="relative my-2">
+          <input id="connection-search" type="text"
+            class="w-full pl-8 pr-2 py-1 text-sm border border-gray-300 rounded-md" placeholder="接続を検索...">
+          <svg xmlns="http://www.w3.org/2000/svg"
+            class="h-4 w-4 absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" fill="none"
+            viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+        </div>
+
+        <button id="create-new-connection"
+          class="mt-2 w-full flex items-center justify-center space-x-1 text-xs bg-primary-50 text-primary-700 py-1 px-2 rounded border border-primary-200 hover:bg-primary-100">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+          </svg>
+          <span>新規接続</span>
+        </button>
+      </div>
+
+      <div id="sidebar-connections" class="mt-2 overflow-y-auto" style="max-height: calc(100vh - 150px);">
+        <!-- Connections will be populated here -->
+      </div>
+    </div>
+
+    <!-- Main content area -->
+    <div class="flex-1 flex flex-col overflow-hidden">
+      <header class="bg-white border-b border-gray-200 px-4 py-2 flex justify-between items-center">
+        <div class="flex items-center">
+          <button id="toggle-sidebar" class="md:hidden mr-2 text-gray-500 hover:text-gray-700">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+              stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          <h1 class="text-xl font-bold text-gray-900">HTTP Request Runner</h1>
+        </div>
+        <div class="text-sm text-gray-500">
+          <span id="current-date"></span>
+        </div>
+      </header>
+
+      <div class="flex-1 overflow-auto p-4">
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 max-w-[1600px] mx-auto">
+          <!-- Control Panel -->
+          <div class="lg:col-span-1">
+            <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
+              <div class="mb-4">
+                <label for="method" class="block text-sm font-medium text-gray-700 mb-1">HTTPメソッド</label>
+                <select id="method"
+                  class="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                  <option value="GET">GET</option>
+                  <option value="POST">POST</option>
+                  <option value="PUT">PUT</option>
+                  <option value="DELETE">DELETE</option>
+                  <option value="PATCH">PATCH</option>
+                  <option value="HEAD">HEAD</option>
+                  <option value="OPTIONS">OPTIONS</option>
+                </select>
+              </div>
+
+              <div class="space-y-3 mb-6">
+                <button id="sendRequest"
+                  class="w-full py-2 px-4 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-md shadow-sm transition duration-150 flex items-center justify-center space-x-1 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd"
+                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 1.414L10.586 9H7a1 1 0 100 2h3.586l-1.293 1.293a1 1 0 101.414 1.414l3-3a1 1 0 000-1.414z"
+                      clip-rule="evenodd" />
+                  </svg>
+                  <span>リクエスト送信</span>
+                </button>
+
+                <button id="saveConnection"
+                  class="w-full py-2 px-4 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-md shadow-sm transition duration-150 flex items-center justify-center space-x-1 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path
+                      d="M7.707 10.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 11.586V6h5a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2h5v5.586l-1.293-1.293zM9 4a1 1 0 012 0v2H9V4z" />
+                  </svg>
+                  <span>接続情報を保存</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Request/Response Panel -->
+          <div class="lg:col-span-3 space-y-6">
+            <!-- Request Panel -->
+            <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+              <div class="border-b border-gray-200 bg-gray-50 px-4 py-2">
+                <h3 class="text-sm font-medium text-gray-700">リクエスト</h3>
+              </div>
+              <div class="p-4">
+                <div class="mb-4">
+                  <label for="url" class="block text-sm font-medium text-gray-700 mb-1">URL</label>
+                  <div class="flex">
+                    <input type="text" id="url" placeholder="https://example.com/api/data"
+                      class="flex-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                  </div>
+                </div>
+
+                <div class="mb-4">
+                  <div class="flex justify-between items-center mb-1">
+                    <label for="headers" class="block text-sm font-medium text-gray-700">ヘッダー (JSONフォーマット)</label>
+                    <button id="formatHeaders" class="text-xs text-primary-600 hover:text-primary-500">フォーマット</button>
+                  </div>
+                  <textarea id="headers" rows="3"
+                    placeholder='{"Content-Type": "application/json", "Authorization": "Bearer token"}'
+                    class="code-font block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"></textarea>
+                </div>
+
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">リクエストボディ</label>
+
+                  <!-- タブのヘッダー -->
+                  <div class="border-b border-gray-200">
+                    <nav class="flex -mb-px" aria-label="Tabs">
+                      <button id="tab-json"
+                        class="tab-button tab-active text-sm py-2 px-4 border-b-2 font-medium text-primary-600 border-primary-500">
+                        JSON
+                      </button>
+                      <button id="tab-files"
+                        class="tab-button text-sm py-2 px-4 border-b-2 font-medium text-gray-500 border-transparent hover:border-gray-300">
+                        ファイル
+                      </button>
+                    </nav>
+                  </div>
+
+                  <!-- JSON タブのコンテンツ -->
+                  <div id="content-json" class="tab-content mt-3">
+                    <div class="flex justify-end mb-1">
+                      <button id="formatBody" class="text-xs text-primary-600 hover:text-primary-500">フォーマット</button>
+                    </div>
+                    <textarea id="body" rows="5" placeholder='{"key": "value", "example": {"nested": "data"}}'
+                      class="code-font block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"></textarea>
+                  </div>
+
+                  <!-- ファイル タブのコンテンツ -->
+                  <div id="content-files" class="tab-content hidden mt-3">
+                    <div class="space-y-3">
+                      <div id="file-list" class="space-y-2">
+                        <!-- ファイルリストがここに表示される -->
+                      </div>
+
+                      <div class="flex items-center">
+                        <label for="file-upload"
+                          class="flex-1 cursor-pointer py-1.5 px-3 bg-gray-50 hover:bg-gray-100 text-sm rounded-md border border-gray-300 flex items-center justify-center">
+                          <svg class="w-4 h-4 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                            xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13">
+                            </path>
+                          </svg>
+                          ファイルを選択
+                          <input id="file-upload" type="file" multiple class="hidden">
+                        </label>
+                      </div>
+
+                      <div class="text-xs text-gray-500 p-2">
+                        <p>• ファイルとJSONデータは同時に送信できません</p>
+                        <p>• ファイル送信時には自動的に <code>Content-Type: multipart/form-data</code> が設定されます</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Response Panel -->
+            <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+              <div class="border-b border-gray-200 bg-gray-50 px-4 py-2 flex justify-between items-center">
+                <h3 class="text-sm font-medium text-gray-700">レスポンス</h3>
+                <div class="flex items-center space-x-2">
+                  <span id="status-code" class="hidden px-2 py-1 text-xs rounded-full"></span>
+                  <span id="response-time" class="text-xs text-gray-500"></span>
+                </div>
+              </div>
+              <div class="p-4">
+                <pre id="responseContent"
+                  class="code-font text-xs text-gray-700 bg-gray-50 p-3 rounded-md h-64 overflow-auto">レスポンスはここに表示されます</pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mobile sidebar (off-canvas) -->
+  <div id="mobile-sidebar" class="fixed inset-0 z-40 hidden">
+    <div class="absolute inset-0 bg-gray-600 bg-opacity-75"></div>
+    <div class="relative flex-1 flex flex-col max-w-xs w-full bg-white">
+      <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+        <h2 class="text-lg font-medium text-gray-900">保存済み接続</h2>
+        <button id="close-sidebar" class="text-gray-400 hover:text-gray-500">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <div class="p-2">
+        <div class="relative my-2">
+          <input id="mobile-connection-search" type="text"
+            class="w-full pl-8 pr-2 py-1 text-sm border border-gray-300 rounded-md" placeholder="接続を検索...">
+          <svg xmlns="http://www.w3.org/2000/svg"
+            class="h-4 w-4 absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" fill="none"
+            viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+        </div>
+
+        <button id="mobile-create-new-connection"
+          class="mt-2 w-full flex items-center justify-center space-x-1 text-xs bg-primary-50 text-primary-700 py-1 px-2 rounded border border-primary-200 hover:bg-primary-100">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+          </svg>
+          <span>新規接続</span>
+        </button>
+      </div>
+      <div id="mobile-sidebar-connections" class="mt-2 overflow-y-auto" style="max-height: calc(100vh - 150px);">
+        <!-- Mobile connections will be populated here -->
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 現在の日付を表示
+    const currentDate = new Date().toLocaleDateString('ja-JP', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+    document.getElementById('current-date').textContent = currentDate;
+    document.getElementById('sidebar-date').textContent = currentDate;
+
+    // タブ切り替え
+    const tabButtons = document.querySelectorAll('.tab-button');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    tabButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        // アクティブなタブをリセット
+        tabButtons.forEach(btn => {
+          btn.classList.remove('tab-active', 'text-primary-600', 'border-primary-500');
+          btn.classList.add('text-gray-500', 'border-transparent');
+        });
+
+        tabContents.forEach(content => {
+          content.classList.add('hidden');
+        });
+
+        // クリックされたタブをアクティブにする
+        button.classList.add('tab-active', 'text-primary-600', 'border-primary-500');
+        button.classList.remove('text-gray-500', 'border-transparent');
+
+        // 対応するコンテンツを表示
+        const contentId = 'content-' + button.id.split('-')[1];
+        document.getElementById(contentId).classList.remove('hidden');
+      });
+    });
+
+    // ファイルアップロード処理
+    const fileUpload = document.getElementById('file-upload');
+    const fileList = document.getElementById('file-list');
+    let selectedFiles = []; // 選択されたファイルを保持する配列
+
+    fileUpload.addEventListener('change', () => {
+      // 新しく選択されたファイルを配列に追加
+      if (fileUpload.files.length > 0) {
+        for (let i = 0; i < fileUpload.files.length; i++) {
+          selectedFiles.push(fileUpload.files[i]);
+        }
+        updateFileList(); // ファイルリストを更新
+      }
+    });
+
+    // ファイルリストの更新
+    function updateFileList() {
+      fileList.innerHTML = '';
+
+      if (selectedFiles.length === 0) {
+        fileList.innerHTML = '<div class="text-sm text-gray-500 p-2">選択されたファイルはありません</div>';
+        return;
+      }
+
+      selectedFiles.forEach((file, index) => {
+        const fileItem = document.createElement('div');
+        fileItem.className = 'flex items-center justify-between text-sm p-2 bg-gray-50 rounded-md';
+        fileItem.innerHTML = `
+          <div class="flex items-center overflow-hidden">
+            <svg class="w-4 h-4 mr-2 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+            </svg>
+            <div class="truncate">
+              <span class="font-medium">${file.name}</span>
+              <span class="text-xs text-gray-500 ml-1">(${formatFileSize(file.size)})</span>
+            </div>
+          </div>
+          <button class="remove-file text-gray-400 hover:text-red-500 ml-2" data-index="${index}">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        `;
+        fileList.appendChild(fileItem);
+      });
+
+      // 削除ボタンのイベントリスナーを追加
+      document.querySelectorAll('.remove-file').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const index = parseInt(e.currentTarget.dataset.index);
+          selectedFiles.splice(index, 1);
+          updateFileList();
+        });
+      });
+    }
+
+    // ファイルサイズのフォーマット
+    function formatFileSize(bytes) {
+      if (bytes === 0) return '0 Bytes';
+
+      const k = 1024;
+      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    // JSONフォーマッター
+    function formatJSON(input) {
+      try {
+        const json = JSON.parse(input);
+        return JSON.stringify(json, null, 2);
+      } catch (e) {
+        return input;
+      }
+    }
+
+    document.getElementById('formatHeaders').addEventListener('click', () => {
+      const headersField = document.getElementById('headers');
+      headersField.value = formatJSON(headersField.value);
+    });
+
+    document.getElementById('formatBody').addEventListener('click', () => {
+      const bodyField = document.getElementById('body');
+      bodyField.value = formatJSON(bodyField.value);
+    });
+
+    // リクエスト送信処理
+    document.getElementById('sendRequest').addEventListener('click', async () => {
+      const method = document.getElementById('method').value;
+      const url = document.getElementById('url').value;
+      let headers = {};
+
+      try {
+        headers = JSON.parse(document.getElementById('headers').value || '{}');
+      } catch (e) {
+        alert('ヘッダーのJSONフォーマットが無効です');
+        return;
+      }
+
+      const statusCodeElement = document.getElementById('status-code');
+      const responseTimeElement = document.getElementById('response-time');
+      const responseContentElement = document.getElementById('responseContent');
+
+      responseContentElement.textContent = 'リクエスト送信中...';
+      statusCodeElement.className = 'hidden px-2 py-1 text-xs rounded-full';
+      responseTimeElement.textContent = '';
+
+      const startTime = performance.now();
+
+      try {
+        let options = {
+          method,
+          headers,
+        };
+
+        // アクティブなタブを確認
+        const isJsonTab = document.getElementById('tab-json').classList.contains('tab-active');
+
+        if (isJsonTab) {
+          // JSONタブがアクティブの場合
+          const body = document.getElementById('body').value;
+          if (method !== 'GET' && method !== 'HEAD' && body) {
+            options.body = body;
+          }
+        } else {
+          // ファイルタブがアクティブの場合
+          if (selectedFiles.length > 0) {
+            const formData = new FormData();
+            selectedFiles.forEach((file, index) => {
+              formData.append(`file${index}`, file);
+            });
+            // FormDataを使用する場合はヘッダーを自動設定するので、Content-Typeヘッダーは削除
+            if (headers['Content-Type']) delete headers['Content-Type'];
+            options.body = formData;
+          }
+        }
+
+        const response = await fetch(url, options);
+        const endTime = performance.now();
+        const responseTime = Math.round(endTime - startTime);
+
+        let responseData;
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          responseData = await response.json();
+          responseData = JSON.stringify(responseData, null, 2);
+        } else {
+          responseData = await response.text();
+        }
+
+        // ステータスコードの表示
+        statusCodeElement.textContent = response.status;
+        statusCodeElement.classList.remove('hidden');
+
+        if (response.ok) {
+          statusCodeElement.classList.add('bg-green-100', 'text-green-800');
+        } else {
+          statusCodeElement.classList.add('bg-red-100', 'text-red-800');
+        }
+
+        responseTimeElement.textContent = `${responseTime}ms`;
+        responseContentElement.textContent = responseData;
+
+        // 最後に使用した接続を保存
+        saveLastConnection();
+      } catch (error) {
+        responseContentElement.textContent = `エラー: ${error.message}`;
+        statusCodeElement.textContent = 'エラー';
+        statusCodeElement.classList.remove('hidden');
+        statusCodeElement.classList.add('bg-red-100', 'text-red-800');
+      }
+    });
+
+    // 接続情報を保存
+    document.getElementById('saveConnection').addEventListener('click', () => {
+      const connectionName = prompt('この接続の名前を入力してください:');
+      if (!connectionName) return;
+
+      // アクティブなタブを確認
+      const isJsonTab = document.getElementById('tab-json').classList.contains('tab-active');
+
+      const connection = {
+        name: connectionName,
+        method: document.getElementById('method').value,
+        url: document.getElementById('url').value,
+        headers: document.getElementById('headers').value,
+        bodyType: isJsonTab ? 'json' : 'files',
+        body: document.getElementById('body').value,
+        created: new Date().toISOString(),
+      };
+
+      // 既存の接続を取得
+      const savedConnections = JSON.parse(localStorage.getItem('savedConnections') || '[]');
+      savedConnections.push(connection);
+      localStorage.setItem('savedConnections', JSON.stringify(savedConnections));
+
+      // 接続リストを更新
+      updateConnectionLists();
+
+      // 最後に使用した接続を保存
+      saveLastConnection();
+    });
+
+    // 最後に使用した接続を保存
+    function saveLastConnection() {
+      const isJsonTab = document.getElementById('tab-json').classList.contains('tab-active');
+
+      const lastConnection = {
+        method: document.getElementById('method').value,
+        url: document.getElementById('url').value,
+        headers: document.getElementById('headers').value,
+        bodyType: isJsonTab ? 'json' : 'files',
+        body: document.getElementById('body').value,
+      };
+
+      localStorage.setItem('lastConnection', JSON.stringify(lastConnection));
+    }
+
+    // 接続リストを更新する関数 (デスクトップとモバイル両方)
+    function updateConnectionLists() {
+      updateConnectionList('sidebar-connections');
+      updateConnectionList('mobile-sidebar-connections');
+    }
+
+    // 接続リストを更新する関数
+    function updateConnectionList(containerId) {
+      const connectionList = document.getElementById(containerId);
+      const savedConnections = JSON.parse(localStorage.getItem('savedConnections') || '[]');
+
+      if (savedConnections.length === 0) {
+        connectionList.innerHTML = '<div class="px-4 py-3 text-gray-500 text-xs italic">保存された接続はありません</div>';
+        return;
+      }
+
+      connectionList.innerHTML = '';
+
+      // 日付でソートする（新しい順）
+      savedConnections.sort((a, b) => {
+        return new Date(b.created || 0) - new Date(a.created || 0);
+      });
+
+      savedConnections.forEach((connection, index) => {
+        const connectionElement = document.createElement('div');
+        connectionElement.className = 'flex items-center justify-between px-4 py-2 hover:bg-gray-50 border-b border-gray-100 cursor-pointer';
+        connectionElement.innerHTML = `
+                    <div class="flex items-center space-x-2 overflow-hidden">
+                        <span class="inline-block w-3 h-3 flex-shrink-0 rounded-full ${getMethodColor(connection.method)}"></span>
+                        <div class="overflow-hidden">
+                            <div class="text-sm font-medium truncate">${connection.name}</div>
+                            <div class="text-xs text-gray-500 truncate">${connection.url}</div>
+                        </div>
+                    </div>
+                    <div class="flex-shrink-0 flex items-center space-x-1">
+                        <button class="edit-connection text-gray-400 hover:text-gray-700 p-1" data-index="${index}" title="編集">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                        </button>
+                        <button class="delete-connection text-gray-400 hover:text-red-600 p-1" data-index="${index}" title="削除">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                        </button>
+                    </div>
+                `;
+        connectionList.appendChild(connectionElement);
+      });
+
+      // 接続をロードするためのイベントリスナーを追加
+      connectionList.querySelectorAll('.flex.items-center.justify-between').forEach((element, index) => {
+        element.addEventListener('click', (e) => {
+          if (!e.target.closest('button')) {
+            loadConnection(savedConnections[index]);
+            // モバイルサイドバーを閉じる（モバイル表示時）
+            closeMobileSidebar();
+          }
+        });
+      });
+
+      // 編集ボタンにイベントリスナーを追加
+      connectionList.querySelectorAll('.edit-connection').forEach(button => {
+        button.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const index = parseInt(e.currentTarget.dataset.index);
+          editConnection(index);
+        });
+      });
+
+      // 削除ボタンにイベントリスナーを追加
+      connectionList.querySelectorAll('.delete-connection').forEach(button => {
+        button.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const index = parseInt(e.currentTarget.dataset.index);
+          deleteConnection(index);
+        });
+      });
+    }
+
+    // 接続を編集する関数
+    function editConnection(index) {
+      const savedConnections = JSON.parse(localStorage.getItem('savedConnections') || '[]');
+      const connection = savedConnections[index];
+
+      const newName = prompt('接続名を編集:', connection.name);
+      if (newName === null) return; // キャンセル時
+
+      connection.name = newName;
+      savedConnections[index] = connection;
+      localStorage.setItem('savedConnections', JSON.stringify(savedConnections));
+
+      // 接続リストを更新
+      updateConnectionLists();
+    }
+
+    // 接続を削除する関数
+    function deleteConnection(index) {
+      if (!confirm('この接続を削除してもよろしいですか？')) return;
+
+      const savedConnections = JSON.parse(localStorage.getItem('savedConnections') || '[]');
+      savedConnections.splice(index, 1);
+      localStorage.setItem('savedConnections', JSON.stringify(savedConnections));
+
+      // 接続リストを更新
+      updateConnectionLists();
+    }
+
+    // 保存済み接続をロードする関数
+    function loadConnection(connection) {
+      document.getElementById('method').value = connection.method;
+      document.getElementById('url').value = connection.url;
+      document.getElementById('headers').value = connection.headers;
+      document.getElementById('body').value = connection.body || '';
+
+      // ボディタイプに応じたタブを有効化
+      if (connection.bodyType === 'files') {
+        document.getElementById('tab-files').click();
+      } else {
+        document.getElementById('tab-json').click();
+      }
+    }
+
+    // HTTPメソッドに基づいて色を取得する関数
+    function getMethodColor(method) {
+      switch (method) {
+        case 'GET': return 'bg-blue-500';
+        case 'POST': return 'bg-green-500';
+        case 'PUT': return 'bg-yellow-500';
+        case 'DELETE': return 'bg-red-500';
+        case 'PATCH': return 'bg-purple-500';
+        default: return 'bg-gray-500';
+      }
+    }
+
+    // 新規接続ボタンのイベントリスナー
+    document.getElementById('create-new-connection').addEventListener('click', createNewConnection);
+    document.getElementById('mobile-create-new-connection').addEventListener('click', createNewConnection);
+
+    // 新規接続を作成する関数
+    function createNewConnection() {
+      // フォームをクリア
+      document.getElementById('method').value = 'GET';
+      document.getElementById('url').value = '';
+      document.getElementById('headers').value = '';
+      document.getElementById('body').value = '';
+
+      // JSONタブをアクティブに
+      document.getElementById('tab-json').click();
+
+      // ファイルリストをクリア
+      selectedFiles = [];
+      updateFileList();
+
+      // モバイルサイドバーを閉じる（モバイル表示時）
+      closeMobileSidebar();
+    }
+
+    // サイドバー検索機能
+    document.getElementById('connection-search').addEventListener('input', filterConnections);
+    document.getElementById('mobile-connection-search').addEventListener('input', e => {
+      document.getElementById('connection-search').value = e.target.value;
+      filterConnections(e);
+    });
+
+    // 接続をフィルタリングする関数
+    function filterConnections(e) {
+      const query = e.target.value.toLowerCase();
+      const savedConnections = JSON.parse(localStorage.getItem('savedConnections') || '[]');
+
+      const filteredConnections = query
+        ? savedConnections.filter(conn =>
+          conn.name.toLowerCase().includes(query) ||
+          conn.url.toLowerCase().includes(query) ||
+          conn.method.toLowerCase().includes(query))
+        : savedConnections;
+
+      renderFilteredConnections('sidebar-connections', filteredConnections);
+      renderFilteredConnections('mobile-sidebar-connections', filteredConnections);
+    }
+
+    // フィルタリングされた接続を表示する関数
+    function renderFilteredConnections(containerId, connections) {
+      const connectionList = document.getElementById(containerId);
+
+      if (connections.length === 0) {
+        connectionList.innerHTML = '<div class="px-4 py-3 text-gray-500 text-xs italic">一致する接続がありません</div>';
+        return;
+      }
+
+      connectionList.innerHTML = '';
+
+      connections.forEach((connection, index) => {
+        const connectionElement = document.createElement('div');
+        connectionElement.className = 'flex items-center justify-between px-4 py-2 hover:bg-gray-50 border-b border-gray-100 cursor-pointer';
+        connectionElement.innerHTML = `
+                    <div class="flex items-center space-x-2 overflow-hidden">
+                        <span class="inline-block w-3 h-3 flex-shrink-0 rounded-full ${getMethodColor(connection.method)}"></span>
+                        <div class="overflow-hidden">
+                            <div class="text-sm font-medium truncate">${connection.name}</div>
+                            <div class="text-xs text-gray-500 truncate">${connection.url}</div>
+                        </div>
+                    </div>
+                    <div class="flex-shrink-0 flex items-center space-x-1">
+                        <button class="edit-connection text-gray-400 hover:text-gray-700 p-1" data-index="${index}" title="編集">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                        </button>
+                        <button class="delete-connection text-gray-400 hover:text-red-600 p-1" data-original-index="${getOriginalIndex(connection)}" title="削除">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                        </button>
+                    </div>
+                `;
+        connectionList.appendChild(connectionElement);
+
+        // 接続をロードするためのイベントリスナー
+        connectionElement.addEventListener('click', (e) => {
+          if (!e.target.closest('button')) {
+            loadConnection(connection);
+            closeMobileSidebar();
+          }
+        });
+      });
+
+      // 編集ボタンにイベントリスナーを追加
+      connectionList.querySelectorAll('.edit-connection').forEach((button, index) => {
+        button.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const originalIndex = getOriginalIndex(connections[index]);
+          editConnection(originalIndex);
+        });
+      });
+
+      // 削除ボタンにイベントリスナーを追加
+      connectionList.querySelectorAll('.delete-connection').forEach(button => {
+        button.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const originalIndex = parseInt(e.currentTarget.dataset.originalIndex);
+          deleteConnection(originalIndex);
+        });
+      });
+    }
+
+    // オリジナルの配列インデックスを見つける関数
+    function getOriginalIndex(connection) {
+      const savedConnections = JSON.parse(localStorage.getItem('savedConnections') || '[]');
+      return savedConnections.findIndex(conn =>
+        conn.name === connection.name &&
+        conn.url === connection.url &&
+        conn.method === connection.method &&
+        conn.created === connection.created);
+    }
+
+    // モバイルサイドバーの表示/非表示を切り替える
+    document.getElementById('toggle-sidebar').addEventListener('click', () => {
+      document.getElementById('mobile-sidebar').classList.remove('hidden');
+    });
+
+    document.getElementById('close-sidebar').addEventListener('click', closeMobileSidebar);
+
+    // モバイルサイドバーを閉じる関数
+    function closeMobileSidebar() {
+      document.getElementById('mobile-sidebar').classList.add('hidden');
+    }
+
+    // 初回表示時はファイルリストを更新
+    updateFileList();
+
+    // ページロード時の処理
+    window.addEventListener('load', () => {
+      updateConnectionLists();
+
+      // 最後に使用した接続があれば読み込み
+      const lastConnection = JSON.parse(localStorage.getItem('lastConnection'));
+      if (lastConnection) {
+        document.getElementById('method').value = lastConnection.method;
+        document.getElementById('url').value = lastConnection.url;
+        document.getElementById('headers').value = lastConnection.headers;
+        document.getElementById('body').value = lastConnection.body || '';
+
+        // ボディタイプに応じたタブを有効化
+        if (lastConnection.bodyType === 'files') {
+          document.getElementById('tab-files').click();
+        }
+      }
+
+      // 外部クリックでモバイルサイドバーを閉じる
+      document.getElementById('mobile-sidebar').addEventListener('click', (e) => {
+        if (e.target === document.getElementById('mobile-sidebar')) {
+          closeMobileSidebar();
+        }
+      });
+    });
+  </script>
+</body>
+
+</html>
